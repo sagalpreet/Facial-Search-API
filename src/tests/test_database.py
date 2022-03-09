@@ -56,3 +56,9 @@ def test_get_info():
     assert val[0] == 'George W Bush'
     assert val[1] == file_dir + '/resources/George_W_Bush_0001.jpg'
     assert val[2] == '{}'
+
+def test_bulk_insert():
+    bulk_load = test_db.bulk_insert()
+    assert bulk_load != None
+    assert bulk_load._BulkLoad__table_name == 'test'
+    assert bulk_load._BulkLoad__conn == test_db._Database__conn
