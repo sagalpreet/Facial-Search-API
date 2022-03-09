@@ -5,12 +5,18 @@ import psycopg
 
 class BulkLoad:
     def __init__(self, table_name, cur, conn):
+        # initialzing bulkload object
         self.__table_name = table_name
         self.__cur = cur
         self.__conn = conn
         pass
 
     def insert_image(self, name, path: str, encoding1: str, encoding2: str, metadata: str):
+        '''
+        to store images in bulk into database
+        commit is made only when explicitly
+        called on this object
+        '''
 
         query = f'''
         insert into {self.__table_name} (name, path, encoding1, encoding2, metadata) 
@@ -20,17 +26,21 @@ class BulkLoad:
         try:
             self.__cur.execute(query)
         except:
+            # rollback if query fails or an exception occurs
             self.__conn.rollback()
             raise DatabaseError(f'Insert Failed')
 
     def rollback(self):
+        # to rollback changes
         self.__conn.rollback()
 
     def commit(self):
+        # to commit changes made using insert_image method
         self.__conn.commit()
         self.__cur.close()
 
 class Database:
+    # root directory of the project
     root_dir = os.path.abspath(os.path.join(
         os.path.dirname(__file__), '../..'))
 
@@ -38,6 +48,9 @@ class Database:
         pass
 
     def read_config(self):
+        # read database credentials and name from configuration file
+        # configuration file is read as json
+
         config_file = open(Database.root_dir + '/db.config')
         config = json.load(config_file)
 
@@ -45,9 +58,14 @@ class Database:
         self.__password = config['password']
         self.__db_name = config['db_name']
 
+        # closing the configuration file
         config_file.close()
 
     def connect(self):
+        '''
+        make a connection with the database
+        else raise exception
+        '''
         try:
             self.__conn = psycopg.connect(
             f'dbname={self.__db_name} user={self.__user} password={self.__password}')
@@ -55,6 +73,19 @@ class Database:
             raise DatabaseError(f'Could not connect to {self.__db_name}')
 
     def create_table(self, table_name: str):
+        '''
+        create table of specified name
+        if an attempt to create another table
+        is made, that table is made and switched
+        to
+
+        always use this methods inside try except block
+        as exception will be raised if query fails
+
+        so, this method can be used to both switch as well as
+        create table
+        '''
+
         self.__table_name = table_name
         cur = self.__conn.cursor()
 
@@ -71,9 +102,11 @@ class Database:
 
         try:
             cur.execute(query)
+            # commit on query success
             self.__conn.commit()
             cur.close()
         except:
+            # rollback of query failure
             self.__conn.rollback()
             raise DatabaseError(
                 f'Relation {table_name} could not be constructed')
@@ -89,13 +122,19 @@ class Database:
 
         try:
             cur.execute(query)
+            # commit on query success
             self.__conn.commit()
             cur.close()
         except:
+            # rollback on query failure
             self.__conn.rollback()
             raise DatabaseError(f'Insert Failed')
 
     def bulk_insert(self):
+        '''
+        returns an object which can be used to
+        load bulk data into the database
+        '''
         cur = self.__conn.cursor()
         return BulkLoad(self.__table_name, cur, self.__conn)
 
@@ -113,14 +152,18 @@ class Database:
         order by dis desc limit {k};
         '''
 
+        # initialize value to none
         val = None
 
         try:
             cur.execute(query)
+            # on query success, fetch all relevant records
             val = cur.fetchall()
-            cur.close()
+            # commit on query success
             self.__conn.commit()
+            cur.close()
         except:
+            # rollback on query failure
             self.__conn.rollback()
             raise DatabaseError(f'Identification Failed')
         
@@ -135,18 +178,23 @@ class Database:
         where id = {id}
         '''
 
+        # initialize val to none
         val = None
 
         try:
             cur.execute(query)
+            # fetch record on query success
             val = cur.fetchone()
+            # commit on query success
             self.__conn.commit()
             cur.close()
         except:
+            # rollback on query failure
             self.__conn.rollback()
             raise DatabaseError(f'Fetch Failed')
 
         return val
 
     def __del__(self):
+        # close connection on object deletion
         self.__conn.close()

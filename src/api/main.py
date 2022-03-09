@@ -35,18 +35,22 @@ async def search_faces(k: int = Form(...), strictness: float = Form(...), file: 
     # store image temporarily on file system
     file_path = f'{FILES}/{uuid4()}.jpg'
 
+    # asynchronously read files
     async with aiofiles.open(file_path, 'wb') as temp_file:
         content = await file.read()
         await temp_file.write(content)
 
+    # load and encode image
     image = load_image_file(file_path)
     encodings = face_encodings(image)
 
     res = []
 
+    # collect top k results for each face
     for encoding in encodings:
         res.extend(db.identify(str(list(encoding[:64])), str(list(encoding[64:])), strictness, k))
 
+    # take out the top k results
     res.sort(reverse=True)
     res = res[:k]
 
@@ -64,6 +68,7 @@ async def add_face(file: UploadFile = File(..., description="An image file havin
     if (file.content_type != 'image/jpeg'):
         return {"status": "ERROR", "body": "Only jpg formats supported"}
 
+    # get the name of the person from filename
     name = file.filename
 
     if (name[-4] == '.'):
@@ -76,10 +81,12 @@ async def add_face(file: UploadFile = File(..., description="An image file havin
     # store image on file system
     file_path = f'{FILES}/{uuid4()}.jpg'
 
+    # asynchronously read file
     async with aiofiles.open(file_path, 'wb') as temp_file:
         content = await file.read()
         await temp_file.write(content)
 
+    # load and encode image
     image = load_image_file(file_path)
     encoding = face_encodings(image)[0]
     metadata = get_metadata_from_image(file_path)
@@ -108,36 +115,44 @@ async def add_faces_in_bulk(file: UploadFile = File(..., description="A ZIP file
     with zipfile.ZipFile(file_path, 'r') as zip_ref:
         zip_ref.extractall(directory)
 
+    # get bulk load object
     bulk_load = db.bulk_insert()
 
     for root, _, files in os.walk(directory):
         if (not files):
+            # check if no file is there
             continue
 
+        # get the name of the person from parent directory
         name = os.path.basename(root)
 
         for file_name in files:
             image_path = f'{root}/{file_name}'
 
+            # load and encode image, get metadata for it
             image = load_image_file(image_path)
             encoding = face_encodings(image)[0]
             metadata = get_metadata_from_image(image_path)
 
+            # convert encodings into strings
             e1 = str(list(encoding[:64]))
             e2 = str(list(encoding[64:]))
 
             try:
                 bulk_load.insert_image(name, image_path, e1, e2, metadata)
             except:
+                # rollback if transaction fails
                 bulk_load.rollback()
                 return {"status": "ERROR", "body": "Insertion Failed"}
 
+    # commit if successful
     bulk_load.commit()
     return {"status": "OK", "body": "Image added"}
 
 
 @ app.post("/get_face_info/")
 async def get_face_info(api_key: str = Form(...), face_id: str = Form(...)):
+    # retrieve info from database
     info = db.get_info(face_id)
 
     if (info == None):
@@ -145,5 +160,8 @@ async def get_face_info(api_key: str = Form(...), face_id: str = Form(...)):
 
     return {"status": "OK", "body": info}
 
+# the following code can be uncommented to run server from the file itself
+'''
 if __name__ == "__main__":
     uvicorn.run("main:app", host="127.0.0.1", port=5000, log_level="info")
+'''
