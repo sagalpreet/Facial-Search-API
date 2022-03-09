@@ -31,10 +31,9 @@ def test_insert_image():
     encoding = face_encodings(image)[0]
     metadata = get_metadata_from_image(path)
 
-    test_db.insert_image(name, str(list(encoding[:64])), str(list(encoding[64:])), metadata)
+    test_db.insert_image(name, path, str(list(encoding[:64])), str(list(encoding[64:])), metadata)
 
 def test_identify():
-    name = 'George W Bush'
     path = file_dir + '/resources/George_W_Bush_0002.jpg'
 
     image = load_image_file(path)
@@ -42,6 +41,15 @@ def test_identify():
 
     val = test_db.identify(str(list(encoding[:64])), str(list(encoding[64:])), 0.6, 2)[0]
     
-    assert val[1] == 'George W Bush'
-    assert val[2] == 0.35449545088393986
-    assert val[3] == '{}'
+    assert val[0] == 0.35449545088393986
+    assert val[1] == 1
+    assert val[2] == 'George W Bush'
+
+def test_get_info():
+    id = 1
+
+    val = test_db.get_info(id)
+
+    assert val[0] == 'George W Bush'
+    assert val[1] == file_dir + '/resources/George_W_Bush_0001.jpg'
+    assert val[2] == '{}'

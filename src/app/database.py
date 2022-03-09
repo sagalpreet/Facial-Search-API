@@ -30,12 +30,14 @@ class Database:
         cur = self.__conn.cursor()
 
         query = f'''
-        create table faces (
+        create table {table_name} (
             id serial primary key, 
             name varchar(100), 
+            path varchar(200),
             encoding1 cube, 
             encoding2 cube, 
-            metadata varchar(2000));
+            metadata varchar(2000),
+            upload_time timestamp default current_timestamp);
         '''
 
         try:
@@ -45,13 +47,13 @@ class Database:
             raise DatabaseError(
                 f'Relation {table_name} could not be constructed')
 
-    def insert_image(self, name, encoding1: str, encoding2: str, metadata: str, commit: bool = True):
+    def insert_image(self, name, path: str, encoding1: str, encoding2: str, metadata: str, commit: bool = True):
 
         cur = self.__conn.cursor()
 
         query = f'''
-        insert into {self.__table_name} (name, encoding1, encoding2, metadata) 
-        values ('{name}', cube(array{encoding1}), cube(array{encoding2}), '{metadata}');
+        insert into {self.__table_name} (name, path, encoding1, encoding2, metadata) 
+        values ('{name}', '{path}', cube(array{encoding1}), cube(array{encoding2}), '{metadata}');
         '''
 
         try:
@@ -65,10 +67,10 @@ class Database:
         cur = self.__conn.cursor()
 
         query = f'''
-        select * from
-        (select d1.id, d1.name, sqrt(d1.ed1*d1.ed1 + d2.ed2*d2.ed2) as dis, d1.metadata
+        select dis, id, name from
+        (select d1.id as id, d1.name as name, sqrt(d1.ed1*d1.ed1 + d2.ed2*d2.ed2) as dis
         from
-        (select id, name, encoding1 <-> cube(array{encoding1}) as ed1, metadata from {self.__table_name}) as d1,
+        (select id, name, encoding1 <-> cube(array{encoding1}) as ed1 from {self.__table_name}) as d1,
         (select id, encoding2 <-> cube(array{encoding2}) as ed2 from {self.__table_name}) as d2
         where d1.id = d2.id) as d
         where dis<{threshold}
@@ -82,5 +84,25 @@ class Database:
         
         return cur.fetchall()
 
+    def get_info(self, id: int):
+        cur = self.__conn.cursor()
+
+        query = f'''
+        select name, path, metadata, upload_time
+        from {self.__table_name}
+        where id = {id}
+        '''
+
+        try:
+            cur.execute(query)
+        except:
+            raise DatabaseError(f'Fetch Failed')
+
+        return cur.fetchone()
+
+
     def commit(self):
         self.__conn.commit()
+
+    def tear(self):
+        self.__conn.close()
