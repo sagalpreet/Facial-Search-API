@@ -3,6 +3,32 @@ import json
 from sqlite3 import DatabaseError
 import psycopg
 
+class BulkLoad:
+    def __init__(self, table_name, cur, conn):
+        self.__table_name = table_name
+        self.__cur = cur
+        self.__conn = conn
+        pass
+
+    def insert_image(self, name, path: str, encoding1: str, encoding2: str, metadata: str):
+
+        query = f'''
+        insert into {self.__table_name} (name, path, encoding1, encoding2, metadata) 
+        values ('{name}', '{path}', cube(array{encoding1}), cube(array{encoding2}), '{metadata}');
+        '''
+
+        try:
+            self.__cur.execute(query)
+        except:
+            self.__conn.rollback()
+            raise DatabaseError(f'Insert Failed')
+
+    def rollback(self):
+        self.__conn.rollback()
+
+    def commit(self):
+        self.__conn.commit()
+        self.__cur.close()
 
 class Database:
     root_dir = os.path.abspath(os.path.join(
@@ -22,8 +48,11 @@ class Database:
         config_file.close()
 
     def connect(self):
-        self.__conn = psycopg.connect(
+        try:
+            self.__conn = psycopg.connect(
             f'dbname={self.__db_name} user={self.__user} password={self.__password}')
+        except:
+            raise DatabaseError(f'Could not connect to {self.__db_name}')
 
     def create_table(self, table_name: str):
         self.__table_name = table_name
@@ -43,11 +72,13 @@ class Database:
         try:
             cur.execute(query)
             self.__conn.commit()
+            cur.close()
         except:
+            self.__conn.rollback()
             raise DatabaseError(
                 f'Relation {table_name} could not be constructed')
 
-    def insert_image(self, name, path: str, encoding1: str, encoding2: str, metadata: str, commit: bool = True):
+    def insert_image(self, name, path: str, encoding1: str, encoding2: str, metadata: str):
 
         cur = self.__conn.cursor()
 
@@ -58,10 +89,15 @@ class Database:
 
         try:
             cur.execute(query)
-            if (commit):
-                self.__conn.commit()
+            self.__conn.commit()
+            cur.close()
         except:
+            self.__conn.rollback()
             raise DatabaseError(f'Insert Failed')
+
+    def bulk_insert(self):
+        cur = self.__conn.cursor()
+        return BulkLoad(self.__table_name, cur, self.__conn)
 
     def identify(self, encoding1: str, encoding2: str, threshold: float, k: int):
         cur = self.__conn.cursor()
@@ -77,12 +113,18 @@ class Database:
         order by dis desc limit {k};
         '''
 
+        val = None
+
         try:
             cur.execute(query)
+            val = cur.fetchall()
+            cur.close()
+            self.__conn.commit()
         except:
+            self.__conn.rollback()
             raise DatabaseError(f'Identification Failed')
         
-        return cur.fetchall()
+        return val
 
     def get_info(self, id: int):
         cur = self.__conn.cursor()
@@ -93,16 +135,18 @@ class Database:
         where id = {id}
         '''
 
+        val = None
+
         try:
             cur.execute(query)
+            val = cur.fetchone()
+            self.__conn.commit()
+            cur.close()
         except:
+            self.__conn.rollback()
             raise DatabaseError(f'Fetch Failed')
 
-        return cur.fetchone()
+        return val
 
-
-    def commit(self):
-        self.__conn.commit()
-
-    def tear(self):
+    def __del__(self):
         self.__conn.close()

@@ -31,7 +31,7 @@ except:
 
 
 @app.post("/search_faces/")
-async def search_faces(k: float = Form(...), strictness: float = Form(...), file: UploadFile = File(..., description="An image file, possible containing multiple human faces.")):
+async def search_faces(k: int = Form(...), strictness: float = Form(...), file: UploadFile = File(..., description="An image file, possible containing multiple human faces.")):
     # store image temporarily on file system
     file_path = f'{FILES}/{uuid4()}.jpg'
 
@@ -66,12 +66,12 @@ async def add_face(file: UploadFile = File(..., description="An image file havin
 
     name = file.filename
 
-    if (name[-3] == '.'):
+    if (name[-4] == '.'):
         # .jpg format
-        name = name[:-3]
+        name = name[:-4]
     else:
         # .jpeg format
-        name = name[:-4]
+        name = name[:-5]
 
     # store image on file system
     file_path = f'{FILES}/{uuid4()}.jpg'
@@ -81,7 +81,7 @@ async def add_face(file: UploadFile = File(..., description="An image file havin
         await temp_file.write(content)
 
     image = load_image_file(file_path)
-    encoding = face_encodings(image)
+    encoding = face_encodings(image)[0]
     metadata = get_metadata_from_image(file_path)
 
     try:
@@ -98,7 +98,7 @@ async def add_faces_in_bulk(file: UploadFile = File(..., description="A ZIP file
 
     # store images on file system
     file_path = f'{FILES}/{uuid4()}.zip'
-    directory = file_path[-3]
+    directory = file_path[:-4]
 
     async with aiofiles.open(file_path, 'wb') as temp_file:
         content = await file.read()
@@ -108,6 +108,8 @@ async def add_faces_in_bulk(file: UploadFile = File(..., description="A ZIP file
     with zipfile.ZipFile(file_path, 'r') as zip_ref:
         zip_ref.extractall(directory)
 
+    bulk_load = db.bulk_insert()
+
     for root, _, files in os.walk(directory):
         if (not files):
             continue
@@ -115,18 +117,22 @@ async def add_faces_in_bulk(file: UploadFile = File(..., description="A ZIP file
         name = os.path.basename(root)
 
         for file_name in files:
-            image_path = f'{root}/{name}'
+            image_path = f'{root}/{file_name}'
 
             image = load_image_file(image_path)
-            encoding = face_encodings(image)
+            encoding = face_encodings(image)[0]
             metadata = get_metadata_from_image(image_path)
 
-        try:
-            db.insert_image(name, str(list(encoding[:64])), str(list(encoding[64:])), metadata, False)
-        except:
-            return {"status": "ERROR", "body": "Insertion Failed"}
+            e1 = str(list(encoding[:64]))
+            e2 = str(list(encoding[64:]))
 
-    db.commit()
+            try:
+                bulk_load.insert_image(name, image_path, e1, e2, metadata)
+            except:
+                bulk_load.rollback()
+                return {"status": "ERROR", "body": "Insertion Failed"}
+
+    bulk_load.commit()
     return {"status": "OK", "body": "Image added"}
 
 
