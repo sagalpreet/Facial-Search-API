@@ -45,7 +45,6 @@ def test_identify():
     val = test_db.identify(str(list(encoding[:64])), str(list(encoding[64:])), 0.6, 2)[0]
     
     assert val[0] == 0.35449545088393986
-    assert val[1] == 1
     assert val[2] == 'George W Bush'
 
 def test_get_info():

@@ -27,6 +27,7 @@ class BulkLoad:
             self.__cur.execute(query)
         except:
             # rollback if query fails or an exception occurs
+            print(f'Failed:\n{query}\n')
             self.__conn.rollback()
             raise DatabaseError(f'Insert Failed')
 
@@ -93,10 +94,10 @@ class Database:
         create table {table_name} (
             id serial primary key, 
             name varchar(100), 
-            path varchar(200),
+            path varchar(1000),
             encoding1 cube, 
             encoding2 cube, 
-            metadata varchar(2000),
+            metadata varchar(5000),
             upload_time timestamp default current_timestamp);
         '''
 
@@ -149,7 +150,7 @@ class Database:
         (select id, encoding2 <-> cube(array{encoding2}) as ed2 from {self.__table_name}) as d2
         where d1.id = d2.id) as d
         where dis<{threshold}
-        order by dis desc limit {k};
+        order by dis limit {k};
         '''
 
         # initialize value to none

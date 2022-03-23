@@ -16,5 +16,15 @@ def get_metadata_from_image(path: str) -> str:
         tag_name = TAGS.get(tid, tid)
         tag_value = exifdata.get(tid)
         meta_dict[tag_name] = tag_value
+
+    str_data = '{}'
+
+    try:
+        str_data = json.dumps(meta_dict)
+    except:
+        try:
+            str_data = str(meta_dict)
+        except:
+            return '{}'
     
-    return json.dumps(meta_dict)
+    return str_data.replace("'", '"')

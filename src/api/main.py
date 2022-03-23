@@ -51,7 +51,7 @@ async def search_faces(k: int = Form(...), strictness: float = Form(...), file: 
         res.extend(db.identify(str(list(encoding[:64])), str(list(encoding[64:])), strictness, k))
 
     # take out the top k results
-    res.sort(reverse=True)
+    res.sort()
     res = res[:k]
 
     try:
@@ -87,9 +87,12 @@ async def add_face(file: UploadFile = File(..., description="An image file havin
         await temp_file.write(content)
 
     # load and encode image
-    image = load_image_file(file_path)
-    encoding = face_encodings(image)[0]
-    metadata = get_metadata_from_image(file_path)
+    try:
+        image = load_image_file(file_path)
+        encoding = face_encodings(image)[0]
+        metadata = get_metadata_from_image(file_path)
+    except:
+        return {"status": "ERROR", "body": "Image not detected"}
 
     try:
         db.insert_image(name, file_path, str(list(encoding[:64])), str(list(encoding[64:])), metadata)
@@ -130,9 +133,12 @@ async def add_faces_in_bulk(file: UploadFile = File(..., description="A ZIP file
             image_path = f'{root}/{file_name}'
 
             # load and encode image, get metadata for it
-            image = load_image_file(image_path)
-            encoding = face_encodings(image)[0]
-            metadata = get_metadata_from_image(image_path)
+            try:
+                image = load_image_file(image_path)
+                encoding = face_encodings(image)[0]
+                metadata = get_metadata_from_image(image_path)
+            except:
+                continue
 
             # convert encodings into strings
             e1 = str(list(encoding[:64]))
